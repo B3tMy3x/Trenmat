@@ -20,7 +20,7 @@ async def read_root():
 @router.post("/register")
 async def register(user: UserBase, db: AsyncSession = Depends(get_db)):
     hashed_password = hash_password(user.password)
-    db_user = User(username=user.username, password=hashed_password)
+    db_user = User(username=user.username, password=hashed_password, role=user.role)
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)

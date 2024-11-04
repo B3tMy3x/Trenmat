@@ -28,7 +28,7 @@ def create_access_token(data: dict, ip: str):
             "ip": ip,
         }
     )
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, str(SECRET_KEY), algorithm=ALGORITHM)
 
 
 async def verify_token(request: Request, token: str):
