@@ -5,7 +5,7 @@ from typing import List
 from jwt_auth import hash_password, verify_password, create_access_token
 from db.models import User
 from db import get_db
-from routers.pydantic_models import UserBase, UserResponse
+from routers.pydantic_models import UserReg, UserLog, UserResponse
 from fastapi import APIRouter
 
 
@@ -18,7 +18,7 @@ async def read_root():
 
 
 @router.post("/register")
-async def register(user: UserBase, db: AsyncSession = Depends(get_db)):
+async def register(user: UserReg, db: AsyncSession = Depends(get_db)):
     hashed_password = hash_password(user.password)
     db_user = User(username=user.username, password=hashed_password, role=user.role)
     db.add(db_user)
@@ -28,7 +28,7 @@ async def register(user: UserBase, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login")
-async def login(user: UserBase, request: Request, db: AsyncSession = Depends(get_db)):
+async def login(user: UserLog, request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.username == user.username))
     db_user = result.scalars().first()
     if db_user is None or not verify_password(user.password, db_user.password):

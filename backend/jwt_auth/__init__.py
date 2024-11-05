@@ -11,6 +11,7 @@ ACCESS_TOKEN_EXPIRE = AuthSettings.ACCESS_TOKEN_EXPIRE
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 async def verify_token(request: Request, token: str):
     try:
         payload = jwt.decode(token, str(SECRET_KEY), algorithms=[ALGORITHM])

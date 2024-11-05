@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ApiClient from "../components/ApiClient";
 import { MathJax, MathJaxContext } from "better-react-mathjax";
+import { useNavigate } from "react-router-dom";
 
 
 const formatToLatex = (expression) => {
@@ -22,18 +23,33 @@ const formatToLatex = (expression) => {
 const Home = () => {
   const [questionData, setQuestionData] = useState(null);
   const [timer, setTimer] = useState(10);
+  const navigate = useNavigate();
 
   const fetchQuestion = async () => {
     try {
-      const response = await ApiClient.get("/api/get_question");
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/register");
+        return;
+      }
+  
+      const response = await ApiClient.get("/api/get_question", {
+        headers: {
+          accept: "application/json",
+          token: token,
+        },
+      });
       setQuestionData(response.data);
-      console.log(response)
       setTimer(10);
     } catch (error) {
-      console.error("Ошибка при получении вопроса:", error);
+      if (error.response && error.response.status === 401) {
+        localStorage.removeItem("token");
+        navigate("/register");
+      } else {
+        console.error("Ошибка при получении вопроса:", error);
+      }
     }
   };
-
   const handleAnswer = (answer) => {
     if (answer === questionData.correct_answer) {
       alert("Правильный ответ!");
