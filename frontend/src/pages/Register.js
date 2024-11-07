@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import AuthClient from '../components/AuthClient';
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -10,16 +10,13 @@ function Register() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prevFormData) => ({ ...prevFormData, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:8080/auth/register', formData);
+      const response = await AuthClient.post('/auth/register', formData);
       console.log('Registration successful:', response.data);
     } catch (error) {
       console.error('Error during registration:', error.response?.data || error.message);
@@ -59,6 +56,7 @@ function Register() {
             value={formData.role}
             onChange={handleChange}
             className="w-full p-2 border border-gray-300 rounded mt-1"
+            required
           >
             <option value="STUDENT">Student</option>
             <option value="TEACHER">Teacher</option>
@@ -66,7 +64,7 @@ function Register() {
         </div>
         <button
           type="submit"
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition"
+          className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600 transition"
         >
           Register
         </button>

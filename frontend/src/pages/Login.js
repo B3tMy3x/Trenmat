@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import AuthClient from '../components/AuthClient';
 
 function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setCredentials((prevCredentials) => ({ ...prevCredentials, [name]: value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:8080/auth/login', {
-        username,
-        password,
-      });
+      const response = await AuthClient.post('/auth/login', credentials);
       const token = response.data.access_token;
       localStorage.setItem('token', token);
       console.log('Login successful:', token);
@@ -28,8 +29,9 @@ function Login() {
           <label className="block text-gray-700">Username</label>
           <input
             type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            name="username"
+            value={credentials.username}
+            onChange={handleChange}
             className="w-full p-2 border border-gray-300 rounded mt-1"
             required
           />
@@ -38,8 +40,9 @@ function Login() {
           <label className="block text-gray-700">Password</label>
           <input
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            name="password"
+            value={credentials.password}
+            onChange={handleChange}
             className="w-full p-2 border border-gray-300 rounded mt-1"
             required
           />
