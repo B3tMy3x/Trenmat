@@ -19,3 +19,10 @@ async def get_question(request: Request, token: str = Header(None)):
         "correct_answer": correct_answer,
         "options": options,
     }
+
+
+@router.get("/statistics")
+async def get_statisticks(request: Request, token: str = Header(None)):
+    user_data = await verify_token(request, token)
+    
+    return {"email": user_data["email"], "role": user_data["role"]}

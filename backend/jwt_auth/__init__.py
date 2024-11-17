@@ -15,12 +15,24 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 async def verify_token(request: Request, token: str):
     try:
         payload = jwt.decode(token, str(SECRET_KEY), algorithms=[ALGORITHM])
+
         token_ip = payload.get("ip")
         if token_ip != request.client.host:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="IP address mismatch"
             )
-        return payload
+
+        user_id = payload.get("sub")
+        user_email = payload.get("email")
+        user_role = payload.get("role")
+
+        if not user_id or not user_role:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token data invalid"
+            )
+
+        return {"id": user_id, "email": user_email, "role": user_role}
+
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
