@@ -46,7 +46,7 @@ async def login(user: UserLog, request: Request, db: AsyncSession = Depends(get_
 
     user_ip = request.client.host
     access_token = create_access_token(
-        data={"sub": db_user.id, "email": db_user.email, "role": role}, ip=user_ip
+        data={"sub": db_user.id, "email": db_user.email,"role": role}, ip=user_ip
     )
     return {"access_token": access_token, "token_type": "bearer"}
 

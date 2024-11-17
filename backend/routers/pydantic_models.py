@@ -1,6 +1,13 @@
 from pydantic import BaseModel
+from typing import List
 
 
-class UserResponse(BaseModel):
+class ClassTittle(BaseModel):
+    name: str
+
+
+class ClassOut(BaseModel):
     id: int
-    username: str
+    teacher_id: int
+    cl_name: str
+    student_ids: List[int] = []
