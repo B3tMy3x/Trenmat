@@ -27,6 +27,7 @@ export interface Class {
   id: string;
   name: string;
   teacherId: string;
+  cl_name: string;
   students: Student[];
   assignments: Quiz[];
 }

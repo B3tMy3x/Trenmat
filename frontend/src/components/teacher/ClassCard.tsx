@@ -19,7 +19,7 @@ export function ClassCard({ class: cls, onClick }: ClassCardProps) {
         <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
           <Book className="text-blue-600 dark:text-blue-400" />
         </div>
-        <h3 className="text-xl font-semibold dark:text-white">{cls.name}</h3>
+        <h3 className="text-xl font-semibold dark:text-white">{cls.cl_name}</h3>
       </div>
 
       <div className="space-y-3">

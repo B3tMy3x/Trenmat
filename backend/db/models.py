@@ -11,6 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
+from uuid import uuid4
 
 Base = declarative_base()
 
@@ -21,6 +22,7 @@ class Class(Base):
     teacher_id = Column(BigInteger, nullable=False)
     student_ids = Column(ARRAY(BigInteger), default=[])
     cl_name = Column(String, nullable=False)
+    join_code = Column(String, unique=True, default=lambda: str(uuid4())[:8])
 
 
 class Test(Base):

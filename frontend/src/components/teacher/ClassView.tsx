@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Users, BookOpen, Award, Brain } from "lucide-react";
+import { ArrowLeft, Plus, Users, BookOpen, Award, Brain, Clipboard } from "lucide-react";
 import { Class, Quiz } from "../../types";
 import { AssignmentStats } from "./AssignmentStats";
 import { StudentList } from "./StudentList";
 import { NewAssignmentModal } from "./NewAssignmentModal";
+import apiClient from "../../apiClient";
 
 interface ClassViewProps {
   class: Class;
@@ -12,10 +13,9 @@ interface ClassViewProps {
 }
 
 export function ClassView({ class: cls, onBack }: ClassViewProps) {
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "assignments" | "students"
-  >("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "students">("overview");
   const [showNewAssignment, setShowNewAssignment] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const getCompletionRate = (assignment: Quiz) => {
     return cls.students.length > 0
@@ -27,9 +27,27 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
     if (cls.assignments.length === 0) return 0;
     const totalCompletion = cls.assignments.reduce(
       (acc, assignment) => acc + getCompletionRate(assignment),
-      0,
+      0
     );
     return totalCompletion / cls.assignments.length;
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await apiClient.get(`/classes/${cls.id}/join-link`, {
+        headers: { token },
+      });
+      const link = response.data.join_link;
+      
+      navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Ошибка при копировании ссылки:", error);
+    }
   };
 
   return (
@@ -43,6 +61,12 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
           {cls.name}
         </h1>
       </div>
+
+      {copied && (
+        <div className="fixed bottom-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg transition-all duration-300">
+          Link copied to clipboard!
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <motion.div
@@ -107,15 +131,18 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
             </div>
             <h3 className="font-semibold dark:text-white">Practice Sessions</h3>
           </div>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">
-            {cls.students.reduce(
-              (acc, student) => acc + student.practiceStats.totalAttempts,
-              0,
-            )}
-          </p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-white"></p>
         </motion.div>
       </div>
-
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={handleCopyLink}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Clipboard size={20} />
+          Copy Join Link
+        </button>
+      </div>
       <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
         {(["overview", "assignments", "students"] as const).map((tab) => (
           <button
@@ -135,10 +162,7 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
       <div className="space-y-6">
         {activeTab === "overview" && (
           <div className="space-y-6">
-            <AssignmentStats
-              assignments={cls.assignments}
-              students={cls.students}
-            />
+            <AssignmentStats assignments={cls.assignments} students={cls.students} />
           </div>
         )}
 
@@ -153,10 +177,7 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
                 New Assignment
               </button>
             </div>
-            <AssignmentStats
-              assignments={cls.assignments}
-              students={cls.students}
-            />
+            <AssignmentStats assignments={cls.assignments} students={cls.students} />
           </div>
         )}
 
@@ -168,6 +189,7 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
       {showNewAssignment && (
         <NewAssignmentModal onClose={() => setShowNewAssignment(false)} />
       )}
+
     </div>
   );
 }

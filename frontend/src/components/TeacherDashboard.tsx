@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Users, BookOpen, Calendar } from "lucide-react";
+import axios from "axios";
 import { Class } from "../types";
 import { ClassView } from "./teacher/ClassView";
 import { ClassCard } from "./teacher/ClassCard";
@@ -9,21 +10,52 @@ import { NewClassModal } from "./teacher/NewClassModal";
 export function TeacherDashboard() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [showNewClassForm, setShowNewClassForm] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null)
 
-  const createClass = (className: string) => {
-    if (!className.trim()) return;
+  const token = localStorage.getItem("token");
 
-    const newClass: Class = {
-      id: Date.now().toString(),
-      name: className,
-      teacherId: "1",
-      students: [],
-      assignments: [],
-    };
-    setClasses([...classes, newClass]);
-    setShowNewClassForm(false);
+  const fetchClasses = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get("http://localhost:8080/api/classes", {
+        headers: { token: token ?? "" },
+      });
+      if (response.data && response.data.classes) {
+        setClasses(response.data.classes);
+      }
+    } catch (error) {
+      console.error("Ошибка при получении классов:", error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+
+  const createClass = async (className: string) => {
+    if (!className.trim()) return;
+  
+    try {
+      await axios.post(
+        "http://localhost:8080/api/class",
+        { name: className },
+        { headers: { token: token ?? "" } }
+      );
+      setShowNewClassForm(false);
+      await fetchClasses();
+    } catch (error) {
+      console.error("Ошибка при создании класса:", error);
+    }
+  };
+  
+
+  useEffect(() => {
+    fetchClasses();
+  }, []);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   if (selectedClass) {
     return (
@@ -52,11 +84,7 @@ export function TeacherDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="card p-6"
-        >
+        <motion.div className="card p-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
               <Users className="text-blue-600 dark:text-blue-400" />
@@ -66,16 +94,11 @@ export function TeacherDashboard() {
             </h3>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-white">
-            {classes.reduce((acc, cls) => acc + cls.students.length, 0)}
+            {classes.reduce((acc, cls) => acc + (cls.students?.length || 0), 0)}
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="card p-6"
-        >
+        <motion.div className="card p-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
               <BookOpen className="text-purple-600 dark:text-purple-400" />
@@ -89,12 +112,7 @@ export function TeacherDashboard() {
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="card p-6"
-        >
+        <motion.div className="card p-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
               <Calendar className="text-green-600 dark:text-green-400" />
@@ -104,7 +122,7 @@ export function TeacherDashboard() {
             </h3>
           </div>
           <p className="text-3xl font-bold text-gray-900 dark:text-white">
-            {classes.reduce((acc, cls) => acc + cls.assignments.length, 0)}
+            {classes.reduce((acc, cls) => acc + (cls.assignments?.length || 0), 0)}
           </p>
         </motion.div>
       </div>
