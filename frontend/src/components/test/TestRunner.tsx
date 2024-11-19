@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Clock, CheckCircle, XCircle } from "lucide-react";
+import apiClient from "../../apiClient";
 
 interface TestQuestion {
   question: string;
-  correct_answer: string;
   options: string[];
 }
 
@@ -30,9 +30,7 @@ export function TestRunner({
   onComplete,
   onEndSession,
 }: TestRunnerProps) {
-  const [currentQuestion, setCurrentQuestion] = useState<TestQuestion | null>(
-    null,
-  );
+  const [currentQuestion, setCurrentQuestion] = useState<TestQuestion | null>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
   const [timeLeft, setTimeLeft] = useState(timePerQuestion);
   const [results, setResults] = useState<TestResults>({
@@ -43,18 +41,26 @@ export function TestRunner({
   });
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
   const fetchQuestion = async () => {
     try {
-      const mockQuestion: TestQuestion = {
-        question: "Simplify sin²(x) + cos²(x)",
-        correct_answer: "1",
-        options: ["0", "1", "2", "sin(2x)"],
-      };
-      setCurrentQuestion(mockQuestion);
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await apiClient.get("/question", {
+        headers: { token },
+      });
+      if (response.data) {
+        setCurrentQuestion({
+          question: response.data.question,
+          options: response.data.options,
+        });
+      }
       setTimeLeft(timePerQuestion);
       setSelectedAnswer(null);
       setShowFeedback(false);
+      setIsCorrect(null);
     } catch (error) {
       console.error("Error fetching question:", error);
     }
@@ -86,11 +92,26 @@ export function TestRunner({
     }
   };
 
-  const handleAnswerSelect = (answer: string) => {
+  const handleAnswerSelect = async (answer: string) => {
     if (showFeedback || !currentQuestion) return;
+
     setSelectedAnswer(answer);
     setShowFeedback(true);
-    updateResults(answer === currentQuestion.correct_answer);
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const response = await apiClient.post(
+      "/submit_answer",
+      { answer },
+      {
+        headers: { token },
+      }
+    );
+
+    const isCorrect = response.data.is_correct;
+    setIsCorrect(isCorrect);
+    updateResults(isCorrect);
   };
 
   const updateResults = (isCorrect: boolean) => {
@@ -164,11 +185,11 @@ export function TestRunner({
               disabled={showFeedback}
               className={`w-full p-4 rounded-lg text-left transition-all ${
                 showFeedback
-                  ? option === currentQuestion.correct_answer
+                  ? option === selectedAnswer && !isCorrect
+                    ? "bg-red-100 dark:bg-red-900/30 border-red-500"
+                    : option === selectedAnswer && isCorrect
                     ? "bg-green-100 dark:bg-green-900/30 border-green-500"
-                    : option === selectedAnswer
-                      ? "bg-red-100 dark:bg-red-900/30 border-red-500"
-                      : "bg-gray-100 dark:bg-gray-800"
+                    : "bg-gray-100 dark:bg-gray-800"
                   : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
               } border ${
                 selectedAnswer === option
@@ -179,9 +200,9 @@ export function TestRunner({
               <div className="flex items-center justify-between">
                 <span className="text-gray-900 dark:text-white">{option}</span>
                 {showFeedback &&
-                  (option === currentQuestion.correct_answer ? (
+                  (isCorrect && option === selectedAnswer ? (
                     <CheckCircle className="text-green-500" size={20} />
-                  ) : option === selectedAnswer ? (
+                  ) : !isCorrect && option === selectedAnswer ? (
                     <XCircle className="text-red-500" size={20} />
                   ) : null)}
               </div>

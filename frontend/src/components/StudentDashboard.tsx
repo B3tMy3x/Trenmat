@@ -114,7 +114,6 @@ export function StudentDashboard() {
     setActiveTest(null);
   };
 
-  // Component rendering logic
   if (activeTest) {
     return (
       <TestRunner

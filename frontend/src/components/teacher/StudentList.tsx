@@ -79,6 +79,7 @@ export function StudentList({ students, assignments }: StudentListProps) {
                   Practice Sessions
                 </div>
                 <div className="font-semibold dark:text-white">
+                  {/*
                   {student.practiceStats.totalAttempts} attempts (
                   {(
                     (student.practiceStats.correctAnswers /
@@ -86,6 +87,7 @@ export function StudentList({ students, assignments }: StudentListProps) {
                     100
                   ).toFixed(1)}
                   % accuracy)
+                  */}
                 </div>
               </div>
             </div>

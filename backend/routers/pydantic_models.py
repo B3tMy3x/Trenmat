@@ -12,3 +12,7 @@ class ClassOut(BaseModel):
     cl_name: str
     students: List[int]
     assignments: List[int] = []
+
+
+class Answer(BaseModel):
+    answer: str | int

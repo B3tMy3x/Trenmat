@@ -7,9 +7,15 @@ from db import get_db
 from pydantic import BaseModel
 from jwt_auth import verify_token
 from trig_quiz import generate_question
-from routers.pydantic_models import ClassTittle, ClassOut
+from routers.pydantic_models import ClassTittle, ClassOut, Answer
 from typing import List, Dict
+import redis
+from datetime import datetime, timedelta
+import json
 
+
+r = redis.Redis(host="localhost", port=6379, db=0)
+QUESTION_TIME_LIMIT = 10
 router = APIRouter(prefix="/api")
 
 
@@ -98,7 +104,7 @@ async def get_join_link(
     if not class_obj:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    return {"join_link": f"http://localhost:8080/api/join/class/{class_obj.join_code}"}
+    return {"join_link": class_obj.join_code}
 
 
 @router.get("/join/class/{code}")
@@ -133,3 +139,57 @@ async def join_class_by_code(
     await db.commit()
     await db.refresh(class_obj)
     return {"message": "Successfully joined the class"}
+
+
+@router.get("/question")
+async def start_test(request: Request, token: str = Header(None)):
+    user_data = await verify_token(request, token)
+    user_id = user_data["id"]
+
+    if user_data["role"] == "student":
+        question, correct_answer, options = generate_question()
+
+        start_time = datetime.now()
+        question_end_time = start_time + timedelta(seconds=QUESTION_TIME_LIMIT)
+
+        test_data = {
+            "correct_answer": correct_answer,
+            "question_end_time": question_end_time.isoformat(),
+        }
+
+        r.set(f"test_data_{user_id}", json.dumps(test_data))
+
+        return {
+            "question": question,
+            "options": options,
+        }
+
+    raise HTTPException(
+        status_code=403, detail="Access forbidden. Only students can start a test."
+    )
+
+
+@router.post("/submit_answer")
+async def submit_answer(request: Request, answer: Answer, token: str = Header(None)):
+    user_data = await verify_token(request, token)
+    user_id = user_data["id"]
+    test_data_str = r.get(f"test_data_{user_id}")
+    answer = answer.answer
+    if not test_data_str:
+        raise HTTPException(
+            status_code=404, detail="Test not started or question not found"
+        )
+    test_data = json.loads(test_data_str.decode("utf-8"))
+    question_end_time = datetime.fromisoformat(test_data["question_end_time"])
+
+    if datetime.now() > question_end_time:
+        raise HTTPException(
+            status_code=400, detail="Time for this question has expired"
+        )
+
+    correct_answer = test_data["correct_answer"]
+
+    if answer == correct_answer:
+        return {"is_correct": True}
+    else:
+        return {"is_correct": False}
