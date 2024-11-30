@@ -10,10 +10,13 @@ export interface User {
 
 export interface Quiz {
   id: string;
-  title: string;
-  questions: Question[];
-  dueDate: Date;
-  completedBy: string[];
+  test_name: string;
+  hand_in_by_date: string;
+  created_date: string;
+  multiple_attempts: boolean;
+  number_of_questions: number;
+  time_to_answer: number;
+  completedBy: number;
 }
 
 export interface Question {
@@ -24,7 +27,7 @@ export interface Question {
 }
 
 export interface Class {
-  id: string;
+  id: number;
   name: string;
   teacherId: string;
   cl_name: string;

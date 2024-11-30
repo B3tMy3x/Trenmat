@@ -13,7 +13,7 @@ interface TestRunnerProps {
   timePerQuestion?: number;
   totalQuestions?: number;
   onComplete?: (results: TestResults) => void;
-  onEndSession?: () => void;
+  onClose?: () => void;
 }
 
 interface TestResults {
@@ -28,9 +28,11 @@ export function TestRunner({
   timePerQuestion = 10,
   totalQuestions = Infinity,
   onComplete,
-  onEndSession,
+  onClose,
 }: TestRunnerProps) {
-  const [currentQuestion, setCurrentQuestion] = useState<TestQuestion | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<TestQuestion | null>(
+    null
+  );
   const [questionNumber, setQuestionNumber] = useState(1);
   const [timeLeft, setTimeLeft] = useState(timePerQuestion);
   const [results, setResults] = useState<TestResults>({
@@ -133,6 +135,12 @@ export function TestRunner({
 
   if (!currentQuestion) return null;
 
+  const handleEndSession = () => {
+    onComplete?.(results);
+
+    onClose?.();
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="mb-6 flex justify-between items-center">
@@ -140,6 +148,7 @@ export function TestRunner({
           Question {questionNumber}{" "}
           {mode === "assignment" && `of ${totalQuestions}`}
         </div>
+
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Clock
@@ -150,6 +159,7 @@ export function TestRunner({
                   : "text-gray-600 dark:text-gray-400"
               }
             />
+
             <span
               className={
                 timeLeft < 5
@@ -160,8 +170,12 @@ export function TestRunner({
               {timeLeft}s
             </span>
           </div>
+
           {mode === "practice" && (
-            <button onClick={onEndSession} className="btn-secondary text-sm">
+            <button
+              onClick={handleEndSession}
+              className="btn-secondary text-sm"
+            >
               End Session
             </button>
           )}
@@ -188,8 +202,8 @@ export function TestRunner({
                   ? option === selectedAnswer && !isCorrect
                     ? "bg-red-100 dark:bg-red-900/30 border-red-500"
                     : option === selectedAnswer && isCorrect
-                    ? "bg-green-100 dark:bg-green-900/30 border-green-500"
-                    : "bg-gray-100 dark:bg-gray-800"
+                      ? "bg-green-100 dark:bg-green-900/30 border-green-500"
+                      : "bg-gray-100 dark:bg-gray-800"
                   : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
               } border ${
                 selectedAnswer === option
@@ -234,3 +248,4 @@ export function TestRunner({
     </div>
   );
 }
+  

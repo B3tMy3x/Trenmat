@@ -1,20 +1,45 @@
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Calendar, Users } from "lucide-react";
 import { Quiz, Student } from "../../types";
+import apiClient from "../../apiClient";
 
 interface AssignmentStatsProps {
-  assignments: Quiz[];
+  class_id: number;
   students: Student[];
 }
 
-export function AssignmentStats({
-  assignments,
-  students,
-}: AssignmentStatsProps) {
+export function AssignmentStats({ class_id, students }: AssignmentStatsProps) {
+  const [assignments, setAssignments] = useState<Quiz[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await apiClient.get(`/assignments/${class_id}`, {
+          headers: { token },
+        });
+        setAssignments(response.data.assignments);
+      } catch (err) {
+        setError("Ошибка при загрузке заданий");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAssignments();
+  }, [class_id]);
+
   const getCompletionRate = (assignment: Quiz) => {
     if (students.length === 0) return 0;
-    return (assignment.completedBy.length / students.length) * 100;
+    return (assignment.completedBy / students.length) * 100;
   };
+
+  if (loading) return <div>Загрузка...</div>;
+  if (error) return <div>{error}</div>;
 
   return (
     <div className="space-y-6">
@@ -33,10 +58,10 @@ export function AssignmentStats({
               </div>
               <div>
                 <h3 className="text-lg font-semibold dark:text-white">
-                  {assignment.title}
+                  {assignment.test_name}
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Due: {assignment.dueDate.toLocaleDateString()}
+                  Due: {new Date(assignment.hand_in_by_date).toLocaleDateString()}
                 </p>
               </div>
             </div>
@@ -54,25 +79,12 @@ export function AssignmentStats({
             <div className="flex items-center gap-2">
               <Users size={18} className="text-gray-600 dark:text-gray-400" />
               <span className="text-gray-600 dark:text-gray-400">
-                {assignment.completedBy.length} of {students.length} completed
+                {assignment.completedBy} of {students.length} completed
               </span>
-            </div>
-
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${getCompletionRate(assignment)}%` }}
-              />
-            </div>
+            </ div>
           </div>
         </motion.div>
       ))}
-
-      {assignments.length === 0 && (
-        <div className="text-center py-12 text-gray-600 dark:text-gray-400">
-          No assignments created yet
-        </div>
-      )}
     </div>
   );
 }

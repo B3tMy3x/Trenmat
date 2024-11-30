@@ -1,13 +1,21 @@
-from fastapi import APIRouter, HTTPException, Request, Header, Depends
+from fastapi import APIRouter, HTTPException, Request, Header, Depends, status
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.future import select
-from db.models import Class
+from sqlalchemy.orm import joinedload
+from db.models import Class, Test
 from db import get_db
 from pydantic import BaseModel
 from jwt_auth import verify_token
 from trig_quiz import generate_question
-from routers.pydantic_models import ClassTittle, ClassOut, Answer
+from routers.pydantic_models import (
+    ClassTittle,
+    ClassOut,
+    Answer,
+    Assignment,
+    AssignmentOut,
+)
 from typing import List, Dict
 import redis
 from datetime import datetime, timedelta
@@ -193,3 +201,90 @@ async def submit_answer(request: Request, answer: Answer, token: str = Header(No
         return {"is_correct": True}
     else:
         return {"is_correct": False}
+
+
+@router.post("/assignment")
+async def new_Assignment(
+    request: Request,
+    assigment: Assignment,
+    token: str = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    user_data = await verify_token(request, token)
+    current_class = (
+        await db.execute(select(Class).where(Class.id == assigment.class_id))
+    ).scalar_one_or_none()
+
+    if user_data["role"] == "teacher" and current_class.teacher_id == user_data["id"]:
+        new_assigment = Test(
+            class_id=assigment.class_id,
+            test_name=assigment.test_name,
+            hand_in_by_date=assigment.hand_in_by_date,
+            created_date=assigment.created_date,
+            multiple_attempts=assigment.multiple_attempts,
+            number_of_questions=assigment.number_of_questions,
+            time_to_answer=assigment.time_to_answer,
+        )
+        db.add(new_assigment)
+        await db.commit()
+        await db.refresh(new_assigment)
+        return {"msg": f"succes create"}
+    return {"msg": f"you are not a teacher {user_data['role']}"}
+
+
+@router.get("/assignments/{class_id}", response_model=Dict[str, List[AssignmentOut]])
+async def new_Assignment(
+    class_id: int,
+    request: Request,
+    token: str = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    user_data = await verify_token(request, token)
+    current_class = (
+        await db.execute(select(Class).where(Class.id == class_id))
+    ).scalar_one_or_none()
+    if user_data["role"] == "teacher" and current_class.teacher_id == user_data["id"]:
+        assignments = (
+            (await db.execute(select(Test).where(Test.class_id == class_id)))
+            .scalars()
+            .all()
+        )
+        return {"assignments": assignments}
+
+
+@router.get("/classes/{class_id}/students")
+async def stundents_in_class():
+    pass
+
+
+from datetime import datetime
+
+
+from datetime import datetime
+
+
+@router.get("/homeworks")
+async def get_homeworks(
+    request: Request, token: str = Header(None), db: AsyncSession = Depends(get_db)
+):
+    user_data = await verify_token(request, token)
+    user_id = user_data["id"]
+
+    if user_data["role"] != "student":
+        return {"msg": f"You are not a student, your role is {user_data['role']}"}
+
+    query = select(Class.id).where(Class.student_ids.contains([user_id]))
+    result = await db.execute(query)
+    class_ids = [row[0] for row in result.fetchall()]
+
+    if not class_ids:
+        return {"msg": "No classes found for the student"}
+
+    current_time = datetime.now()
+    query = select(Test).where(
+        Test.class_id.in_(class_ids), Test.hand_in_by_date > current_time
+    )
+    result = await db.execute(query)
+    homeworks = result.scalars().all()
+
+    return {"homeworks": [hw.__dict__ for hw in homeworks]}

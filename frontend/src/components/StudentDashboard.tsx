@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BookOpen,
@@ -12,6 +12,17 @@ import {
 import { TestRunner } from "./test/TestRunner";
 import { TestComplete } from "./test/TestComplete";
 import { ConfirmModal } from "./modals/ConfirmModal";
+import apiClient from "../apiClient";
+
+export interface Homework {
+  id: string;
+  test_name: string;
+  hand_in_by_date: string;
+  completed_by: number;
+  multiple_attempts: boolean;
+  number_of_questions: number;
+  time_to_answer: number;
+}
 
 export function StudentDashboard() {
   const [activeTest, setActiveTest] = useState<{
@@ -28,27 +39,28 @@ export function StudentDashboard() {
     type: "assignment" | "practice";
   } | null>(null);
 
-  const assignments = [
-    {
-      id: "assignment-1",
-      title: "Math Quiz",
-      dueDate: "2024-03-20",
-      completed: false,
-      canBeResolved: true,
-      totalQuestions: 10,
-      timePerQuestion: 60,
-      correctAnswers: 0,
-    },
-    {
-      id: "assignment-2",
-      title: "Science Test",
-      dueDate: "2024-03-22",
-      completed: true,
-      canBeResolved: false,
-      totalQuestions: 15,
-      correctAnswers: 13,
-    },
-  ];
+  const [assignments, setAssignments] = useState<Homework[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await apiClient.get("/homeworks", {
+          headers: { token },
+        });
+        setAssignments(response.data.homeworks);
+      } catch (err) {
+        setError("Ошибка при загрузке заданий");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAssignments();
+  }, []);
 
   const practiceHistory = [
     {
@@ -73,10 +85,10 @@ export function StudentDashboard() {
     streakDays: 5,
   };
 
-  const handleStartAssignment = (assignment: any) => {
+  const handleStartAssignment = (assignment: Homework) => {
     setShowConfirmModal({
       id: assignment.id,
-      title: assignment.title,
+      title: assignment.test_name,
       type: "assignment",
     });
   };
@@ -97,8 +109,8 @@ export function StudentDashboard() {
       setActiveTest({
         mode: "assignment",
         id: assignment?.id,
-        timePerQuestion: assignment?.timePerQuestion,
-        totalQuestions: assignment?.totalQuestions,
+        timePerQuestion: assignment?.time_to_answer,
+        totalQuestions: assignment?.number_of_questions,
       });
     } else {
       setActiveTest({
@@ -140,7 +152,7 @@ export function StudentDashboard() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-8">
+      <div className="mb- 8">
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-blue-800 text-transparent bg-clip-text">
           Welcome Back, Student!
         </h1>
@@ -267,32 +279,38 @@ export function StudentDashboard() {
           </h2>
 
           <div className="space-y-4">
-            {assignments
-              .filter((a) => !a.completed)
-              .map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
-                >
-                  <div className="flex items-center gap-3">
-                    <BookOpen className="text-blue-600 dark:text-blue-400" />
-                    <div>
-                      <span className="dark:text-white block">
-                        {assignment.title}
-                      </span>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        Due: {assignment.dueDate}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    className="btn-primary text-sm"
-                    onClick={() => handleStartAssignment(assignment)}
+            {loading ? (
+              <div>Загрузка...</div>
+            ) : error ? (
+              <div>{error}</div>
+            ) : (
+              assignments
+                .filter((a) => !a.completed_by)
+                .map((assignment) => (
+                  <div
+                    key={assignment.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
                   >
-                    Start Now
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-3">
+                      <BookOpen className="text-blue-600 dark:text-blue-400" />
+                      <div>
+                        <span className="dark:text-white block">
+                          {assignment.test_name}
+                        </span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          Due: {assignment.hand_in_by_date}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      className="btn-primary text-sm"
+                      onClick={() => handleStartAssignment(assignment)}
+                    >
+                      Start Now
+                    </button>
+                  </div>
+                ))
+            )}
           </div>
         </motion.div>
 
@@ -309,16 +327,18 @@ export function StudentDashboard() {
           </h2>
 
           <div className="space-y-4">
-            {[...assignments.filter((a) => a.completed), ...practiceHistory]
+            {[...assignments.filter((a) => a.completed_by), ...practiceHistory]
               .sort((a, b) => {
-                const dateA = "dueDate" in a ? a.dueDate : a.date;
-                const dateB = "dueDate" in b ? b.dueDate : b.date;
+                const dateA =
+                  "hand_in_by_date" in a ? a.hand_in_by_date : a.date;
+                const dateB =
+                  "hand_in_by_date" in b ? b.hand_in_by_date : b.date;
                 return new Date(dateB).getTime() - new Date(dateA).getTime();
               })
               .map((item) => (
                 <div
                   key={
-                    "dueDate" in item
+                    "hand_in_by_date" in item
                       ? `assignment-${item.id}`
                       : `practice-${item.id}`
                   }
@@ -326,23 +346,25 @@ export function StudentDashboard() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      {"dueDate" in item ? (
+                      {"hand_in_by_date" in item ? (
                         <BookOpen className="text-green-600 dark:text-green-400" />
                       ) : (
                         <Brain className="text-purple-600 dark:text-purple-400" />
                       )}
                       <div>
                         <span className="dark:text-white block">
-                          {"dueDate" in item
-                            ? item.title
+                          {"hand_in_by_date" in item
+                            ? item.test_name
                             : `${item.topic} Practice`}
                         </span>
                         <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {"dueDate" in item ? item.dueDate : item.date}
+                          {"hand_in_by_date" in item
+                            ? item.hand_in_by_date
+                            : item.date}
                         </span>
                       </div>
                     </div>
-                    {"canBeResolved" in item && item.canBeResolved ? (
+                    {"multiple_attempts" in item && item.multiple_attempts ? (
                       <button
                         onClick={() => handleStartAssignment(item)}
                         className="btn-secondary text-sm"
@@ -351,8 +373,8 @@ export function StudentDashboard() {
                       </button>
                     ) : (
                       <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                        {"correctAnswers" in item
-                          ? `${((item.correctAnswers / item.totalQuestions) * 100).toFixed(0)}%`
+                        {"completed_by" in item
+                          ? `${((item.completed_by / item.number_of_questions) * 100).toFixed(0)}%`
                           : `${item.score}%`}
                       </span>
                     )}

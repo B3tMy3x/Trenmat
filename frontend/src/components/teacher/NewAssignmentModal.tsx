@@ -1,23 +1,40 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { X, Clock, HelpCircle } from "lucide-react";
+import apiClient from "../../apiClient";
 
 interface NewAssignmentModalProps {
   onClose: () => void;
+  class_id: number;
 }
 
-export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
+export function NewAssignmentModal({ onClose, class_id }: NewAssignmentModalProps) {
   const [formData, setFormData] = useState({
-    title: "",
-    dueDate: "",
-    questionCount: 5,
-    timePerQuestion: 60,
-    canBeResolved: false,
+    class_id: class_id,
+    test_name: "",
+    hand_in_by_date: "",
+    created_date: new Date().toISOString(),
+    multiple_attempts: false,
+    number_of_questions: 5,
+    time_to_answer: 60,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onClose();
+    
+    try {
+      const token = localStorage.getItem("token");
+      const response = await apiClient.post("/assignment", formData, {
+        headers: { token },
+      });
+
+      if (response.data) {
+        console.log("Assignment created successfully:", response.data);
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error creating assignment:", error);
+    }
   };
 
   return (
@@ -51,9 +68,9 @@ export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
             </label>
             <input
               type="text"
-              value={formData.title}
+              value={formData.test_name}
               onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
+                setFormData({ ...formData, test_name: e.target.value })
               }
               placeholder="Enter assignment title"
               className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
@@ -66,9 +83,9 @@ export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
             </label>
             <input
               type="date"
-              value={formData.dueDate}
+              value={formData.hand_in_by_date}
               onChange={(e) =>
-                setFormData({ ...formData, dueDate: e.target.value })
+                setFormData({ ...formData, hand_in_by_date: e.target.value })
               }
               className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
             />
@@ -79,7 +96,7 @@ export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Number of Questions
               </label>
-              <div className="relative">
+               <div className="relative">
                 <HelpCircle
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                   size={18}
@@ -87,11 +104,11 @@ export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
                 <input
                   type="number"
                   min="1"
-                  value={formData.questionCount}
+                  value={formData.number_of_questions}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      questionCount: parseInt(e.target.value),
+                      number_of_questions: parseInt(e.target.value),
                     })
                   }
                   className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
@@ -111,11 +128,11 @@ export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
                 <input
                   type="number"
                   min="10"
-                  value={formData.timePerQuestion}
+                  value={formData.time_to_answer}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      timePerQuestion: parseInt(e.target.value),
+                      time_to_answer: parseInt(e.target.value),
                     })
                   }
                   className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
@@ -127,15 +144,15 @@ export function NewAssignmentModal({ onClose }: NewAssignmentModalProps) {
           <div className="flex items-center">
             <input
               type="checkbox"
-              id="canBeResolved"
-              checked={formData.canBeResolved}
+              id="multiple_attempts"
+              checked={formData.multiple_attempts}
               onChange={(e) =>
-                setFormData({ ...formData, canBeResolved: e.target.checked })
+                setFormData({ ...formData, multiple_attempts: e.target.checked })
               }
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-400"
             />
             <label
-              htmlFor="canBeResolved"
+              htmlFor="multiple_attempts"
               className="ml-2 text-sm text-gray-700 dark:text-gray-300"
             >
               Allow multiple attempts
