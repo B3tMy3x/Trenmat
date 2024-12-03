@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { Award, Clock, CheckCircle } from "lucide-react";
+import apiClient from "../../apiClient";
 
 interface TestCompleteProps {
   results: {

@@ -41,8 +41,16 @@ class Test(Base):
 class Result(Base):
     __tablename__ = "results"
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    test_name = Column(BigInteger, nullable=False)
+    student_id = Column(BigInteger, nullable=False)
     test_id = Column(BigInteger, ForeignKey("tests.id"), nullable=False)
-    attempts = Column(BigInteger, default=0)
     last_attempt_time = Column(Date, nullable=True)
     outcome = Column(JSON, nullable=True)
+
+
+class Practice(Base):
+    __tablename__ = "practices"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    student_id = Column(BigInteger, nullable=False)
+    time = Column(Date, nullable=True)
+    correct = Column(BigInteger, nullable=False)
+    count = Column(BigInteger, nullable=False)

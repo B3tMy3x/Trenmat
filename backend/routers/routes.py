@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
-from db.models import Class, Test
+from db.models import Class, Test, Result, Practice
 from db import get_db
 from pydantic import BaseModel
 from jwt_auth import verify_token
@@ -22,8 +22,35 @@ from datetime import datetime, timedelta
 import json
 
 
-r = redis.Redis(host="localhost", port=6379, db=0)
-QUESTION_TIME_LIMIT = 10
+class RedisClient:
+    def __init__(self, host="localhost", port=6379, db=0):
+        self.client = redis.Redis(host=host, port=port, db=db)
+
+    def set_data(self, key: str, data: dict, expiration: int = None):
+        """Set data in Redis with optional expiration time."""
+        value = json.dumps(data)
+        if expiration:
+            self.client.setex(key, expiration, value)
+        else:
+            self.client.set(key, value)
+
+    def get_data(self, key: str):
+        """Get data from Redis."""
+        value = self.client.get(key)
+        if value:
+            return json.loads(value.decode("utf-8"))
+        return None
+
+    def delete_data(self, key: str):
+        """Delete data from Redis."""
+        self.client.delete(key)
+
+    def key_exists(self, key: str) -> bool:
+        """Check if a key exists in Redis."""
+        return self.client.exists(key) > 0
+
+
+redis_client = RedisClient()
 router = APIRouter(prefix="/api")
 
 
@@ -149,58 +176,265 @@ async def join_class_by_code(
     return {"message": "Successfully joined the class"}
 
 
+@router.post("/start_homework/{assignment_id}")
+async def start_assignment(
+    assignment_id: int,
+    request: Request,
+    token: str = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    user_data = await verify_token(request, token)
+    if user_data["role"] == "student":
+        test_settings = (
+            await db.execute(select(Test).where(Test.id == assignment_id))
+        ).scalar_one_or_none()
+
+        test_data = {
+            "questions_left": test_settings.number_of_questions,
+            "question_time_limit": test_settings.time_to_answer,
+            "correct_answers": 0,
+            "assignment_id": assignment_id,
+            "student_id": user_data["id"],
+        }
+
+        redis_client.set_data(f"started_test_{user_data['id']}", test_data)
+        return {"question_time_limit": test_settings.time_to_answer}
+    raise HTTPException(status_code=403, detail="Access forbidden.")
+
+
 @router.get("/question")
-async def start_test(request: Request, token: str = Header(None)):
+async def get_question(request: Request, token: str = Header(None)):
     user_data = await verify_token(request, token)
     user_id = user_data["id"]
-
     if user_data["role"] == "student":
+        started_test = redis_client.get_data(f"started_test_{user_id}")
+        if not started_test:
+            raise HTTPException(
+                status_code=404, detail="Test not started or question not found"
+            )
+        question_time_limit = started_test["question_time_limit"]
         question, correct_answer, options = generate_question()
 
         start_time = datetime.now()
-        question_end_time = start_time + timedelta(seconds=QUESTION_TIME_LIMIT)
+        question_end_time = start_time + timedelta(seconds=question_time_limit)
 
         test_data = {
             "correct_answer": correct_answer,
             "question_end_time": question_end_time.isoformat(),
         }
 
-        r.set(f"test_data_{user_id}", json.dumps(test_data))
-
-        return {
-            "question": question,
-            "options": options,
-        }
-
-    raise HTTPException(
-        status_code=403, detail="Access forbidden. Only students can start a test."
-    )
+        redis_client.set_data(
+            f"test_data_{user_id}", test_data, expiration=question_time_limit
+        )
+        return {"question": question, "options": options}
+    raise HTTPException(status_code=403, detail="Access forbidden.")
 
 
 @router.post("/submit_answer")
-async def submit_answer(request: Request, answer: Answer, token: str = Header(None)):
+async def submit_answer(
+    request: Request,
+    answer: Answer,
+    token: str = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
     user_data = await verify_token(request, token)
     user_id = user_data["id"]
-    test_data_str = r.get(f"test_data_{user_id}")
-    answer = answer.answer
-    if not test_data_str:
+
+    test_data = redis_client.get_data(f"test_data_{user_id}")
+    if not test_data:
         raise HTTPException(
             status_code=404, detail="Test not started or question not found"
         )
-    test_data = json.loads(test_data_str.decode("utf-8"))
-    question_end_time = datetime.fromisoformat(test_data["question_end_time"])
 
+    question_end_time = datetime.fromisoformat(test_data["question_end_time"])
     if datetime.now() > question_end_time:
         raise HTTPException(
             status_code=400, detail="Time for this question has expired"
         )
 
     correct_answer = test_data["correct_answer"]
+    started_test = redis_client.get_data(f"started_test_{user_id}")
+    if not started_test:
+        raise HTTPException(
+            status_code=404, detail="Test not started or question not found"
+        )
 
-    if answer == correct_answer:
-        return {"is_correct": True}
+    questions_left = started_test["questions_left"] - 1
+    correct_answers = started_test["correct_answers"]
+    if answer.answer == correct_answer:
+        correct_answers += 1
+
+    if questions_left == 0:
+        new_result = Result(
+            student_id=user_id,
+            test_id=started_test["assignment_id"],
+            last_attempt_time=datetime.now(),
+            outcome={"correct_answers": correct_answers},
+        )
+        db.add(new_result)
+        await db.commit()
+        await db.refresh(new_result)
+        redis_client.delete_data(f"started_test_{user_id}")
     else:
-        return {"is_correct": False}
+        updated_test_data = {
+            "questions_left": questions_left,
+            "correct_answers": correct_answers,
+            **started_test,
+        }
+        redis_client.set_data(f"started_test_{user_id}", updated_test_data)
+
+    return {"is_correct": answer.answer == correct_answer}
+
+
+@router.post("/start_practice")
+async def start_practice(request: Request, token: str = Header(None)):
+
+    user_data = await verify_token(request, token)
+
+    if user_data["role"] != "student":
+
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden. Only students can start practice.",
+        )
+
+    practice_data = {
+        "correct_answers": 0,
+        "total_questions": 0,
+        "student_id": user_data["id"],
+    }
+
+    redis_client.set_data(f"practice_{user_data['id']}", practice_data)
+
+    return {"message": "Practice started."}
+
+
+@router.get("/practice_question")
+async def get_practice_question(request: Request, token: str = Header(None)):
+
+    user_data = await verify_token(request, token)
+
+    user_id = user_data["id"]
+
+    if user_data["role"] != "student":
+
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden. Only students can participate in practice.",
+        )
+
+    practice_data = redis_client.get_data(f"practice_{user_id}")
+
+    if not practice_data:
+
+        raise HTTPException(status_code=404, detail="Practice not started.")
+
+    question, correct_answer, options = generate_question()
+
+    practice_question_data = {
+        "correct_answer": correct_answer,
+    }
+
+    redis_client.set_data(f"practice_question_{user_id}", practice_question_data)
+
+    return {
+        "question": question,
+        "options": options,
+    }
+
+
+@router.post("/submit_practice_answer")
+async def submit_practice_answer(
+    request: Request,
+    answer: Answer,
+    token: str = Header(None),
+):
+
+    user_data = await verify_token(request, token)
+
+    user_id = user_data["id"]
+
+    if user_data["role"] != "student":
+
+        raise HTTPException(
+            status_code=403,
+            detail="Access forbidden. Only students can participate in practice.",
+        )
+
+    practice_data = redis_client.get_data(f"practice_{user_id}")
+
+    if not practice_data:
+
+        raise HTTPException(status_code=404, detail="Practice not started.")
+
+    practice_question_data = redis_client.get_data(f"practice_question_{user_id}")
+
+    if not practice_question_data:
+
+        raise HTTPException(status_code=404, detail="No active question found.")
+
+    correct_answer = practice_question_data["correct_answer"]
+
+    if answer.answer == correct_answer:
+
+        is_correct = True
+
+        practice_data["correct_answers"] += 1
+
+    else:
+
+        is_correct = False
+
+    practice_data["total_questions"] += 1
+
+    redis_client.set_data(f"practice_{user_id}", practice_data)
+
+    return {"is_correct": is_correct}
+
+
+@router.post("/end_practice")
+async def end_practice(
+    request: Request, token: str = Header(None), db: AsyncSession = Depends(get_db)
+):
+
+    user_data = await verify_token(request, token)
+
+    user_id = user_data["id"]
+
+    if user_data["role"] != "student":
+
+        raise HTTPException(
+            status_code=403, detail="Access forbidden. Only students can end practice."
+        )
+
+    practice_data = redis_client.get_data(f"practice_{user_id}")
+
+    if not practice_data:
+
+        raise HTTPException(status_code=404, detail="Practice not started.")
+
+    new_practice = Practice(
+        student_id=user_id,
+        time=datetime.now(),
+        correct=practice_data["correct_answers"],
+        count=practice_data["total_questions"],
+    )
+
+    db.add(new_practice)
+
+    await db.commit()
+
+    await db.refresh(new_practice)
+
+    redis_client.delete_data(f"practice_{user_id}")
+
+    redis_client.delete_data(f"practice_question_{user_id}")
+
+    return {
+        "message": "Practice ended.",
+        "correct_answers": practice_data["correct_answers"],
+        "total_questions": practice_data["total_questions"],
+    }
 
 
 @router.post("/assignment")
@@ -218,7 +452,7 @@ async def new_Assignment(
     if user_data["role"] == "teacher" and current_class.teacher_id == user_data["id"]:
         new_assigment = Test(
             class_id=assigment.class_id,
-            test_name=assigment.test_name,
+            student_id=assigment.test_name,
             hand_in_by_date=assigment.hand_in_by_date,
             created_date=assigment.created_date,
             multiple_attempts=assigment.multiple_attempts,
@@ -255,12 +489,6 @@ async def new_Assignment(
 @router.get("/classes/{class_id}/students")
 async def stundents_in_class():
     pass
-
-
-from datetime import datetime
-
-
-from datetime import datetime
 
 
 @router.get("/homeworks")

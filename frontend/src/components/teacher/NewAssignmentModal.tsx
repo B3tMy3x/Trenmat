@@ -127,7 +127,7 @@ export function NewAssignmentModal({ onClose, class_id }: NewAssignmentModalProp
                 />
                 <input
                   type="number"
-                  min="10"
+                  min="5"
                   value={formData.time_to_answer}
                   onChange={(e) =>
                     setFormData({

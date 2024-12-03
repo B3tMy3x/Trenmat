@@ -30,9 +30,7 @@ export function TestRunner({
   onComplete,
   onClose,
 }: TestRunnerProps) {
-  const [currentQuestion, setCurrentQuestion] = useState<TestQuestion | null>(
-    null
-  );
+  const [currentQuestion, setCurrentQuestion] = useState<TestQuestion | null>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
   const [timeLeft, setTimeLeft] = useState(timePerQuestion);
   const [results, setResults] = useState<TestResults>({
@@ -50,9 +48,17 @@ export function TestRunner({
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      const response = await apiClient.get("/question", {
-        headers: { token },
-      });
+      let response;
+      if (mode === "assignment") {
+        response = await apiClient.get("/question", {
+          headers: { token },
+        });
+      } else {
+        response = await apiClient.get("/practice_question", {
+          headers: { token },
+        });
+      }
+
       if (response.data) {
         setCurrentQuestion({
           question: response.data.question,
@@ -103,17 +109,32 @@ export function TestRunner({
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const response = await apiClient.post(
-      "/submit_answer",
-      { answer },
-      {
-        headers: { token },
+    try {
+      let response;
+      if (mode === "assignment") {
+        response = await apiClient.post(
+          "/submit_answer",
+          { answer },
+          {
+            headers: { token },
+          }
+        );
+      } else {
+        response = await apiClient.post(
+          "/submit_practice_answer",
+          { answer },
+          {
+            headers: { token },
+          }
+        );
       }
-    );
 
-    const isCorrect = response.data.is_correct;
-    setIsCorrect(isCorrect);
-    updateResults(isCorrect);
+      const isCorrect = response.data.is_correct;
+      setIsCorrect(isCorrect);
+      updateResults(isCorrect);
+    } catch (error) {
+      console.error("Error submitting answer:", error);
+    }
   };
 
   const updateResults = (isCorrect: boolean) => {
@@ -135,15 +156,24 @@ export function TestRunner({
 
   if (!currentQuestion) return null;
 
-  const handleEndSession = () => {
-    onComplete?.(results);
-
-    onClose?.();
+  const handleEndSession = async () => {
+    if (mode === "practice") {
+      try {
+        const token = localStorage.getItem("token");
+        await apiClient.post("/end_practice", {}, {
+          headers: { token },
+        });
+        onComplete?.(results);
+        onClose?.();
+      } catch (error) {
+        console.error("Error ending practice session:", error);
+      }
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb -6 flex justify-between items-center">
         <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
           Question {questionNumber}{" "}
           {mode === "assignment" && `of ${totalQuestions}`}
@@ -248,4 +278,3 @@ export function TestRunner({
     </div>
   );
 }
-  

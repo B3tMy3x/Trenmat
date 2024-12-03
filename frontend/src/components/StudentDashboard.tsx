@@ -40,8 +40,16 @@ export function StudentDashboard() {
   } | null>(null);
 
   const [assignments, setAssignments] = useState<Homework[]>([]);
+
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
+
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
+  const [inviteCode, setInviteCode] = useState("");
+
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     const fetchAssignments = async () => {
@@ -101,31 +109,84 @@ export function StudentDashboard() {
     });
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!showConfirmModal) return;
 
     if (showConfirmModal.type === "assignment") {
       const assignment = assignments.find((a) => a.id === showConfirmModal.id);
-      setActiveTest({
-        mode: "assignment",
-        id: assignment?.id,
-        timePerQuestion: assignment?.time_to_answer,
-        totalQuestions: assignment?.number_of_questions,
-      });
+      try {
+        const token = localStorage.getItem("token");
+        await apiClient.post(
+          `/start_homework/${assignment?.id}`,
+          {},
+          {
+            headers: { token },
+          }
+        );
+        setActiveTest({
+          mode: "assignment",
+          id: assignment?.id,
+          timePerQuestion: assignment?.time_to_answer,
+          totalQuestions: assignment?.number_of_questions,
+        });
+      } catch (error) {
+        console.error("Error starting assignment:", error);
+      }
     } else {
-      setActiveTest({
-        mode: "practice",
-        timePerQuestion: 10,
-      });
+      try {
+        const token = localStorage.getItem("token");
+        await apiClient.post(
+          "/start_practice",
+          {},
+          {
+            headers: { token },
+          }
+        );
+        setActiveTest({
+          mode: "practice",
+          timePerQuestion: 10,
+        });
+      } catch (error) {
+        console.error("Error starting practice:", error);
+      }
     }
     setShowConfirmModal(null);
   };
+  const handleJoinClass = async () => {
+    try {
+      const token = localStorage.getItem("token");
 
+      await apiClient.get(`/join/class/${inviteCode}`, {
+        headers: { token },
+      });
+
+      setSuccessMessage("Вы успешно присоединились к классу!");
+
+      setInviteCode("");
+
+      setShowInviteModal(false);
+    } catch (error) {
+      console.error("Ошибка при присоединении к классу:", error);
+
+      setSuccessMessage(
+        "Не удалось присоединиться к классу. Попробуйте еще раз."
+      );
+    }
+  };
   const handleTestComplete = (results: any) => {
     setTestResults(results);
     setActiveTest(null);
   };
+  const openInviteModal = () => {
+    setShowInviteModal(true);
+  };
+  const closeInviteModal = () => {
+    setShowInviteModal(false);
 
+    setInviteCode("");
+
+    setSuccessMessage("");
+  };
   if (activeTest) {
     return (
       <TestRunner
@@ -152,15 +213,25 @@ export function StudentDashboard() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb- 8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-blue-800 text-transparent bg-clip-text">
           Welcome Back, Student!
         </h1>
+
         <p className="text-gray-600 dark:text-gray-400">
           You're on a {practiceStats.streakDays}-day learning streak! 🔥
         </p>
       </div>
 
+      <button onClick={openInviteModal} className="btn-primary mb-4">
+        Присоединиться к классу
+      </button>
+
+      {successMessage && (
+        <div className="p-4 mb-4 text-green-800 bg-green-200 rounded-lg">
+          {successMessage}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -264,7 +335,40 @@ export function StudentDashboard() {
           </div>
         </motion.div>
       </div>
+      {showInviteModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <h2 className="text-lg font-semibold mb-4">
+              Введите код приглашения
+            </h2>
 
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              className="border p-2 rounded w-full mb-4"
+              placeholder="Код приглашения"
+            />
+
+            <button onClick={handleJoinClass} className="btn-primary">
+              Присоединиться
+            </button>
+
+            <button onClick={closeInviteModal} className="btn-secondary ml-2">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && (
+        <ConfirmModal
+          title={`Start ${showConfirmModal.title}`}
+          message={`Are you ready to begin ${showConfirmModal.type === "assignment" ? "this assignment" : "your practice session"}?`}
+          onConfirm={handleConfirm}
+          onCancel={() => setShowConfirmModal(null)}
+        />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <motion.div
           initial={{ opacity: 0, x: -20 }}
