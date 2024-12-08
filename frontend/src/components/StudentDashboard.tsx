@@ -13,7 +13,7 @@ import { TestRunner } from "./test/TestRunner";
 import { TestComplete } from "./test/TestComplete";
 import { ConfirmModal } from "./modals/ConfirmModal";
 import apiClient from "../apiClient";
-
+import { User } from "../types";
 export interface Homework {
   id: string;
   test_name: string;
@@ -24,7 +24,11 @@ export interface Homework {
   time_to_answer: number;
 }
 
-export function StudentDashboard() {
+interface StudentDashboardProps {
+  user: User;
+}
+
+export function StudentDashboard({ user }: StudentDashboardProps) {
   const [activeTest, setActiveTest] = useState<{
     mode: "assignment" | "practice";
     id?: string;
@@ -40,15 +44,10 @@ export function StudentDashboard() {
   } | null>(null);
 
   const [assignments, setAssignments] = useState<Homework[]>([]);
-
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState<string | null>(null);
-
   const [showInviteModal, setShowInviteModal] = useState(false);
-
   const [inviteCode, setInviteCode] = useState("");
-
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
@@ -70,28 +69,45 @@ export function StudentDashboard() {
     fetchAssignments();
   }, []);
 
-  const practiceHistory = [
-    {
-      id: "practice-1",
-      date: "2024-03-15",
-      topic: "Mathematics",
-      score: 85,
-      questionsAnswered: 20,
-    },
-    {
-      id: "practice-2",
-      date: "2024-03-14",
-      topic: "Physics",
-      score: 92,
-      questionsAnswered: 15,
-    },
-  ];
+  const handleJoinClass = async () => {
+    try {
+      const token = localStorage.getItem("token");
 
-  const practiceStats = {
-    totalAttempts: 45,
-    correctAnswers: 38,
-    streakDays: 5,
+      await apiClient.get(`/join/class/${inviteCode}`, {
+        headers: { token },
+      });
+
+      setSuccessMessage("Вы успешно присоединились к классу!");
+
+      setInviteCode("");
+
+      setShowInviteModal(false);
+    } catch (error) {
+      console.error("Ошибка при присоединении к классу:", error);
+
+      setSuccessMessage(
+        "Не удалось присоединиться к классу. Попробуйте еще раз."
+      );
+    }
   };
+  const practiceStats = {
+    totalAttempts: user.total_sessions,
+
+    correctAnswers: user.correct_answers,
+
+    streakDays: user.learning_streak,
+  };
+  const practiceHistory = user.session_history.map((session) => ({
+    id: session.date,
+
+    date: session.date,
+
+    topic: "Some Topic",
+
+    score: session.accuracy,
+
+    questionsAnswered: session.count,
+  }));
 
   const handleStartAssignment = (assignment: Homework) => {
     setShowConfirmModal({
@@ -123,6 +139,7 @@ export function StudentDashboard() {
             headers: { token },
           }
         );
+
         setActiveTest({
           mode: "assignment",
           id: assignment?.id,
@@ -142,6 +159,7 @@ export function StudentDashboard() {
             headers: { token },
           }
         );
+
         setActiveTest({
           mode: "practice",
           timePerQuestion: 10,
@@ -150,33 +168,16 @@ export function StudentDashboard() {
         console.error("Error starting practice:", error);
       }
     }
+
     setShowConfirmModal(null);
   };
-  const handleJoinClass = async () => {
-    try {
-      const token = localStorage.getItem("token");
 
-      await apiClient.get(`/join/class/${inviteCode}`, {
-        headers: { token },
-      });
-
-      setSuccessMessage("Вы успешно присоединились к классу!");
-
-      setInviteCode("");
-
-      setShowInviteModal(false);
-    } catch (error) {
-      console.error("Ошибка при присоединении к классу:", error);
-
-      setSuccessMessage(
-        "Не удалось присоединиться к классу. Попробуйте еще раз."
-      );
-    }
-  };
   const handleTestComplete = (results: any) => {
     setTestResults(results);
+
     setActiveTest(null);
   };
+
   const openInviteModal = () => {
     setShowInviteModal(true);
   };
@@ -252,18 +253,14 @@ export function StudentDashboard() {
                 Practice Accuracy
               </span>
               <span className="font-medium text-blue-600 dark:text-blue-400">
-                {(
-                  (practiceStats.correctAnswers / practiceStats.totalAttempts) *
-                  100
-                ).toFixed(1)}
-                %
+                {user.practice_accuracy.toFixed(1)}%
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
               <div
                 className="bg-blue-600 rounded-full h-2 transition-all duration-500"
                 style={{
-                  width: `${(practiceStats.correctAnswers / practiceStats.totalAttempts) * 100}%`,
+                  width: `${user.practice_accuracy}%`,
                 }}
               />
             </div>
@@ -319,9 +316,9 @@ export function StudentDashboard() {
             </h3>
           </div>
           <div className="space-y-2">
-            {practiceHistory.slice(0, 2).map((session) => (
+            {practiceHistory.slice(0, 2).map((session, index) => (
               <div
-                key={session.id}
+                key={`session-${session.id}-${index}`}
                 className="text-sm py-2 px-3 bg-gray-100 dark:bg-gray-800 rounded-lg flex justify-between items-center"
               >
                 <span className="text-gray-600 dark:text-gray-400">
@@ -439,13 +436,9 @@ export function StudentDashboard() {
                   "hand_in_by_date" in b ? b.hand_in_by_date : b.date;
                 return new Date(dateB).getTime() - new Date(dateA).getTime();
               })
-              .map((item) => (
+              .map((item, index) => (
                 <div
-                  key={
-                    "hand_in_by_date" in item
-                      ? `assignment-${item.id}`
-                      : `practice-${item.id}`
-                  }
+                  key={`item-${index + 1}`}
                   className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -468,6 +461,7 @@ export function StudentDashboard() {
                         </span>
                       </div>
                     </div>
+
                     {"multiple_attempts" in item && item.multiple_attempts ? (
                       <button
                         onClick={() => handleStartAssignment(item)}
@@ -504,11 +498,7 @@ export function StudentDashboard() {
           Challenge yourself with interactive practice sessions. Your current
           accuracy is{" "}
           <span className="font-bold">
-            {(
-              (practiceStats.correctAnswers / practiceStats.totalAttempts) *
-              100
-            ).toFixed(1)}
-            %
+            {user.practice_accuracy.toFixed(1)}%
           </span>
         </p>
         <button

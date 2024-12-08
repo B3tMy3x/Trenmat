@@ -137,7 +137,7 @@ export function ClassView({ class: cls, onBack }: ClassViewProps) {
         </button>
       </div>
       <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
-        {(["overview", "assignments", "students"] as const).map((tab) => (
+        {(["overview", "students"] as const).map((tab) => (
           <button
               onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 font-medium transition-colors border-b-2 ${

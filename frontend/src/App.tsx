@@ -15,20 +15,23 @@ import { TeacherDashboard } from "./components/TeacherDashboard";
 import { StudentDashboard } from "./components/StudentDashboard";
 import { ProfileDropdown } from "./components/ProfileDropdown";
 import apiClient from "./apiClient";
+import { User } from "./types";
 
 const App: React.FC = () => {
   const { t } = useTranslation();
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const [user, setUser] = useState<{ email: string; role: string } | null>(
-    null,
-  );
+
+  const [user, setUser] = useState<User | null>(null);
 
   const toggleAuthModal = () => setIsAuthModalOpen(!isAuthModalOpen);
 
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem("token");
+
       if (!token) return;
 
       const response = await apiClient.get("/statistics", {
@@ -36,10 +39,11 @@ const App: React.FC = () => {
       });
 
       if (response.data) {
-        setUser({ email: response.data.id, role: response.data.role });
+        setUser(response.data);
       }
     } catch (error) {
       console.error("Ошибка при проверке токена:", error);
+
       localStorage.removeItem("token");
     }
   };
@@ -224,7 +228,7 @@ const App: React.FC = () => {
         ) : user.role === "teacher" ? (
           <TeacherDashboard />
         ) : (
-          <StudentDashboard />
+          <StudentDashboard user={user} />
         )}
       </main>
 

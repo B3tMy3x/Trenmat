@@ -3,10 +3,8 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
 from db.models import Class, Test, Result, Practice
 from db import get_db
-from pydantic import BaseModel
 from jwt_auth import verify_token
 from trig_quiz import generate_question
 from routers.pydantic_models import (
@@ -15,10 +13,12 @@ from routers.pydantic_models import (
     Answer,
     Assignment,
     AssignmentOut,
+    SessionHistoryItem,
+    StatisticsResponse,
 )
 from typing import List, Dict
 import redis
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 
 
@@ -70,11 +70,58 @@ async def get_question(request: Request, token: str = Header(None)):
     }
 
 
-@router.get("/statistics")
-async def get_statisticks(request: Request, token: str = Header(None)):
+@router.get("/statistics", response_model=StatisticsResponse)
+async def get_statistics(
+    request: Request, token: str = Header(None), db: AsyncSession = Depends(get_db)
+):
     user_data = await verify_token(request, token)
+    user_id = user_data["id"]
+    if user_data["role"] != "student":
+        raise HTTPException(
+            status_code=403, detail="Only students can view statistics."
+        )
+    practices = await db.execute(
+        select(Practice)
+        .where(Practice.student_id == user_id)
+        .order_by(Practice.time.desc())
+    )
+    practices = practices.scalars().all()
+    total_sessions = len(practices)
+    correct_answers = sum(p.correct for p in practices)
+    total_questions = sum(p.count for p in practices)
+    practice_accuracy = (
+        (correct_answers / total_questions * 100) if total_questions > 0 else 0
+    )
+    session_history = [
+        SessionHistoryItem(
+            date=p.time,
+            correct=p.correct,
+            count=p.count,
+            accuracy=(p.correct / p.count * 100) if p.count > 0 else 0,
+        )
+        for p in practices[:3]
+    ]
+    recent_activity = practices[0].time if practices else None
+    today = datetime.now(timezone.utc).date()
+    active_days = sorted({p.time for p in practices}, reverse=True)
+    streak = 0
+    for active_day in active_days:
+        if active_day == today:
+            streak += 1
+            today -= timedelta(days=1)
+        else:
+            break
 
-    return {"email": user_data["email"], "role": user_data["role"]}
+    return StatisticsResponse(
+        email=user_data["email"],
+        role=user_data["role"],
+        practice_accuracy=round(practice_accuracy, 2),
+        total_sessions=total_sessions,
+        correct_answers=correct_answers,
+        recent_activity=recent_activity,
+        session_history=session_history,
+        learning_streak=streak,
+    )
 
 
 @router.post("/class")
@@ -452,7 +499,7 @@ async def new_Assignment(
     if user_data["role"] == "teacher" and current_class.teacher_id == user_data["id"]:
         new_assigment = Test(
             class_id=assigment.class_id,
-            student_id=assigment.test_name,
+            test_name=assigment.test_name,
             hand_in_by_date=assigment.hand_in_by_date,
             created_date=assigment.created_date,
             multiple_attempts=assigment.multiple_attempts,
