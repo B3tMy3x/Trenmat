@@ -9,11 +9,6 @@
 docker run -d --name redis -p 6379:6379 redis:alpine
 ```
 
-Проверить, что Redis запущен:
-```bash
-docker ps
-```
-
 ## 2. Запуск фронтенда
 
 ```bash
@@ -29,7 +24,7 @@ npm run dev
 ```bash
 cd ./backend
 pip install -r requirements.txt
-fastapi run main.py --host 0.0.0.0 --port 8080
+fastapi dev main.py --port 8080
 ```
 
 Бэкенд будет доступен по адресу: `http://localhost:8080`
