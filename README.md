@@ -1,51 +1,45 @@
-Here's the instructions rewritten in Markdown format for a `README.md` file:
 
-```markdown
-# Local Development Setup
+# Инструкция по запуску проекта локально
 
-## Frontend
-1. Navigate to the `frontend` directory:
-   ```sh
-   cd ./frontend
-   ```
-2. Install dependencies:
-   ```sh
-   npm i
-   ```
-3. Start the development server:
-   ```sh
-   npm run dev
-   ```
+## 1. Запуск Redis
 
-## Backend
-1. Navigate to the `backend` directory:
-   ```sh
-   cd ./backend
-   ```
-2. Start the Docker containers:
-   ```sh
-   docker-compose up
-   ```
-3. Install Python dependencies:
-   ```sh
-   pip install -r requirements.txt
-   ```
-4. Run the FastAPI server:
-   ```sh
-   fastapi run main.py --host 8080
-   ```
+Перед запуском основных сервисов необходимо поднять Redis:
 
-## Authentication Service
-1. Navigate to the `auth` directory:
-   ```sh
-   cd ./auth
-   ```
-2. Start the Docker containers:
-   ```sh
-   docker-compose up
-   ```
-3. Run the FastAPI development server:
-   ```sh
-   fastapi dev main.py
-   ```
+```bash
+docker run -d --name redis -p 6379:6379 redis:alpine
 ```
+
+Проверить, что Redis запущен:
+```bash
+docker ps
+```
+
+## 2. Запуск фронтенда
+
+```bash
+cd ./frontend
+npm install
+npm run dev
+```
+
+Фронтенд будет доступен по адресу: `http://localhost:3000`
+
+## 3. Запуск бэкенда
+
+```bash
+cd ./backend
+pip install -r requirements.txt
+fastapi run main.py --host 0.0.0.0 --port 8080
+```
+
+Бэкенд будет доступен по адресу: `http://localhost:8080`
+
+## 4. Запуск сервиса аутентификации
+
+```bash
+cd ./auth
+pip install -r requirements.txt
+fastapi dev main.py
+```
+
+Сервис аутентификации будет доступен по адресу: `http://localhost:8000`
